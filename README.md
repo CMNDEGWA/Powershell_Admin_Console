@@ -21,8 +21,6 @@ Python, FastAPI, PowerShell 7, Vue 3, Bootstrap 5, and SQLite.
 
 ## Development environment
 
-- Manjaro Linux
-- VS Code
 - Python 3
 - FastAPI
 - PowerShell 7
@@ -32,3 +30,5 @@ Python, FastAPI, PowerShell 7, Vue 3, Bootstrap 5, and SQLite.
 ## Project status
 
 Phase 1: Foundation.
+
+... in progress.
