@@ -1,0 +1,33 @@
+import json
+
+from fastapi.testclient import TestClient
+
+from pac.main import app
+
+client = TestClient(app)
+
+
+def test_list_approved_tasks() -> None:
+    response = client.get("/api/tasks")
+
+    assert response.status_code == 200
+    tasks = response.json()["tasks"]
+    assert [task["id"] for task in tasks] == ["hello"]
+
+
+def test_run_approved_task() -> None:
+    response = client.post("/api/tasks/hello/run")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["task_id"] == "hello"
+    assert data["returncode"] == 0
+
+    output = json.loads(data["stdout"])
+    assert output["message"] == "PowerShell task completed"
+
+
+def test_reject_unknown_task() -> None:
+    response = client.post("/api/tasks/not-approved/run")
+
+    assert response.status_code == 404

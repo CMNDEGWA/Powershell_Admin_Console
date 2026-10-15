@@ -1,0 +1,6 @@
+pyproject.toml
+src/Powershell_Admin_Console.egg-info/PKG-INFO
+src/Powershell_Admin_Console.egg-info/SOURCES.txt
+src/Powershell_Admin_Console.egg-info/dependency_links.txt
+src/Powershell_Admin_Console.egg-info/requires.txt
+src/Powershell_Admin_Console.egg-info/top_level.txt
