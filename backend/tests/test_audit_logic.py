@@ -3,6 +3,7 @@ import json
 import pytest
 
 import pac.audit.collectors as collectors
+import pac.audit.platforms as platform_collectors
 from pac.audit.collectors import UnsupportedAuditPlatform
 from pac.audit.recommendations import generate_recommendations
 from pac.powershell.runner import PowerShellExecutionError, TaskResult
@@ -12,7 +13,31 @@ def _result(payload: dict) -> TaskResult:
     return TaskResult(0, json.dumps(payload), "")
 
 
+def _mock_windows(monkeypatch) -> None:
+    monkeypatch.setattr(collectors, "detect_platform", lambda: "windows")
+
+
+@pytest.mark.parametrize(
+    ("system_name", "expected"),
+    [("Windows", "windows"), ("Linux", "linux"), ("Darwin", "macos"), ("FreeBSD", "unsupported")],
+)
+def test_detect_platform(system_name: str, expected: str) -> None:
+    assert platform_collectors.detect_platform(system_name) == expected
+
+
+@pytest.mark.parametrize("target", ["linux", "macos"])
+def test_posix_summary_has_normalized_platform_fields(target: str) -> None:
+    summary = platform_collectors.collect_posix_summary(target)
+
+    assert summary["platform"] == target
+    assert summary["supportedTarget"] is True
+    assert "operatingSystem" in summary
+    assert "networkAdapters" in summary
+    assert summary["remoteAccess"]["configuredEnabled"] is None
+
+
 def test_machine_summary_is_validated_and_tagged(monkeypatch) -> None:
+    _mock_windows(monkeypatch)
     monkeypatch.setattr(
         collectors,
         "run_audit_script",
@@ -34,6 +59,7 @@ def test_machine_summary_is_validated_and_tagged(monkeypatch) -> None:
 
 
 def test_full_audit_rejects_unsupported_target(monkeypatch) -> None:
+    _mock_windows(monkeypatch)
     monkeypatch.setattr(
         collectors,
         "run_audit_script",
@@ -55,6 +81,7 @@ def test_full_audit_rejects_unsupported_target(monkeypatch) -> None:
     ["Microsoft Windows 11 Pro", "Microsoft Windows Server 2022 Datacenter"],
 )
 def test_full_audit_accepts_windows_releases(monkeypatch, caption: str) -> None:
+    _mock_windows(monkeypatch)
     monkeypatch.setattr(
         collectors,
         "run_audit_script",
@@ -65,6 +92,12 @@ def test_full_audit_accepts_windows_releases(monkeypatch, caption: str) -> None:
             "machine": {
                 "administrator": True,
                 "operatingSystem": {"caption": caption, "build": "20348"},
+                "remoteDesktop": {
+                    "configuredEnabled": False,
+                    "serviceState": "Stopped",
+                    "firewallRules": [],
+                    "enabledInboundFirewallRule": False,
+                },
             },
             "sections": {"services": {"status": "succeeded", "data": []}},
         }),
@@ -73,9 +106,39 @@ def test_full_audit_accepts_windows_releases(monkeypatch, caption: str) -> None:
     snapshot = collectors.collect_system_audit()
 
     assert snapshot["machine"]["operatingSystem"]["caption"] == caption
+    assert snapshot["machine"]["platform"] == "windows"
+    assert snapshot["machine"]["remoteAccess"]["name"] == "Remote Desktop"
+
+
+def test_full_audit_dispatches_to_native_linux_collector(monkeypatch) -> None:
+    monkeypatch.setattr(collectors, "detect_platform", lambda: "linux")
+    summary = {"platform": "linux", "administrator": True}
+    monkeypatch.setattr(collectors, "collect_posix_summary", lambda target: summary)
+    monkeypatch.setattr(
+        collectors,
+        "collect_posix_audit",
+        lambda target, machine: {"machine": machine, "collectors": {}, "recommendations": []},
+    )
+
+    snapshot = collectors.collect_system_audit()
+
+    assert snapshot["machine"]["platform"] == "linux"
+
+
+def test_full_posix_audit_requires_root(monkeypatch) -> None:
+    monkeypatch.setattr(collectors, "detect_platform", lambda: "macos")
+    monkeypatch.setattr(
+        collectors,
+        "collect_posix_summary",
+        lambda target: {"platform": target, "administrator": False},
+    )
+
+    with pytest.raises(collectors.InsufficientAuditPrivileges):
+        collectors.collect_system_audit()
 
 
 def test_full_audit_requires_administrator(monkeypatch) -> None:
+    _mock_windows(monkeypatch)
     monkeypatch.setattr(
         collectors,
         "run_audit_script",
@@ -93,6 +156,7 @@ def test_full_audit_requires_administrator(monkeypatch) -> None:
 
 
 def test_full_audit_rejects_invalid_collector_status(monkeypatch) -> None:
+    _mock_windows(monkeypatch)
     monkeypatch.setattr(
         collectors,
         "run_audit_script",
@@ -148,3 +212,15 @@ def test_recommendations_are_evidence_backed_and_sorted() -> None:
     ]
     assert all(finding["evidence"] for finding in findings)
     assert all(finding["rule_version"] for finding in findings)
+
+
+def test_posix_active_remote_login_gets_a_recommendation() -> None:
+    findings = generate_recommendations({
+        "machine": {
+            "platform": "linux",
+            "remoteAccess": {"name": "SSH", "serviceState": "Active"},
+        },
+        "collectors": {},
+    })
+
+    assert findings[0]["id"] == "ssh-service-active"
