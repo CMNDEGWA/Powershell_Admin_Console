@@ -145,7 +145,7 @@ def get_system_summary() -> dict:
     except PowerShellExecutionError as exc:
         raise HTTPException(
             status_code=503,
-            detail="System information could not be collected. Confirm this is a supported Windows installation with PowerShell 7 available.",
+            detail="System information could not be collected for this operating system.",
         ) from exc
 
 
