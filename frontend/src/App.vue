@@ -168,6 +168,7 @@ function statusClass(status) {
     partial: 'text-bg-warning',
     failed: 'text-bg-danger',
     denied: 'text-bg-secondary',
+    unavailable: 'text-bg-secondary',
   }[status] || 'text-bg-secondary'
 }
 
@@ -212,7 +213,7 @@ onMounted(loadDashboard)
           <div>
             <p class="section-kicker mb-1">MACHINE PROFILE</p>
             <h1 id="overview-title" class="h3 mb-1">System overview</h1>
-            <p v-if="machine" class="text-secondary mb-0">Scanned {{ formatDate(machine.collectedAt) }}</p>
+            <p v-if="machine" class="text-secondary mb-0">{{ machine.platform }} · Scanned {{ formatDate(machine.collectedAt) }}</p>
             <p v-else class="text-secondary mb-0">System information is not available.</p>
           </div>
           <button class="btn btn-outline-secondary" :disabled="health !== 'ok'" @click="refreshMachineSummary">
@@ -222,15 +223,15 @@ onMounted(loadDashboard)
 
         <div v-if="summaryError" class="alert alert-warning" role="alert">
           <strong>System scan unavailable:</strong> {{ summaryError }}
-          <div class="small mt-1">The audit collector requires Windows and PowerShell 7.</div>
+          <div class="small mt-1">Windows uses PowerShell 7; Linux and macOS use native system tools.</div>
         </div>
 
         <div v-if="machine">
           <div v-if="machine.administrator === false" class="alert alert-info" role="status">
-            This session is not elevated. Some audit sections may be incomplete; launch PAC as administrator for broader coverage.
+            A full audit requires administrator/root privileges. The system overview remains available without elevation.
           </div>
           <div v-if="machine.supportedTarget === false" class="alert alert-warning" role="status">
-            Full audits are supported on Windows with PowerShell 7; individual checks may vary by edition and available system components.
+            No audit collector is available for this operating system.
           </div>
 
           <div class="row g-3 mb-4">
@@ -245,7 +246,7 @@ onMounted(loadDashboard)
               <div class="overview-value">
                 <span class="overview-label">Operating system</span>
                 <strong>{{ machine.operatingSystem?.caption || 'Not available' }}</strong>
-                <span>Version {{ machine.operatingSystem?.version }} · Build {{ machine.operatingSystem?.build }}</span>
+                <span>{{ machine.platform === 'windows' ? `Version ${machine.operatingSystem?.version} · Build ${machine.operatingSystem?.build}` : `Version ${machine.operatingSystem?.version} · Kernel ${machine.operatingSystem?.build}` }}</span>
               </div>
             </div>
             <div class="col-12 col-md-6 col-xl-3">
@@ -259,7 +260,7 @@ onMounted(loadDashboard)
               <div class="overview-value">
                 <span class="overview-label">Last boot</span>
                 <strong>{{ formatDate(machine.operatingSystem?.lastBootTime) }}</strong>
-                <span>{{ machine.operatingSystem?.architecture }} · PowerShell {{ machine.operatingSystem?.powershellVersion }} · Uptime {{ Math.floor((machine.operatingSystem?.uptimeSeconds || 0) / 3600) }} hours</span>
+                <span>{{ machine.operatingSystem?.architecture }} · {{ machine.operatingSystem?.powershellVersion ? `PowerShell ${machine.operatingSystem.powershellVersion}` : 'Native collector' }} · Uptime {{ Math.floor((machine.operatingSystem?.uptimeSeconds || 0) / 3600) }} hours</span>
               </div>
             </div>
           </div>
@@ -288,14 +289,14 @@ onMounted(loadDashboard)
               </div>
             </div>
             <div class="col-12 col-xl-4">
-              <h2 class="h5 mb-2">Remote Desktop</h2>
+              <h2 class="h5 mb-2">{{ machine.remoteAccess?.name || 'Remote access' }}</h2>
               <dl class="rdp-summary mb-0">
-                <div><dt>Configured</dt><dd>{{ machine.remoteDesktop?.configuredEnabled ? 'Enabled' : 'Disabled' }}</dd></div>
-                <div><dt>Service</dt><dd>{{ machine.remoteDesktop?.serviceState || 'Not available' }} · {{ machine.remoteDesktop?.serviceStartMode || '—' }}</dd></div>
-                <div><dt>Inbound firewall rule</dt><dd>{{ machine.remoteDesktop?.enabledInboundFirewallRule ? 'Enabled rule found' : 'No enabled rule found' }}</dd></div>
-                <div><dt>Firewall rules detected</dt><dd>{{ machine.remoteDesktop?.firewallRules?.length || 0 }}</dd></div>
+                <div><dt>Configured</dt><dd>{{ machine.remoteAccess?.configuredEnabled === true ? 'Enabled' : machine.remoteAccess?.configuredEnabled === false ? 'Disabled' : 'Not assessed' }}</dd></div>
+                <div><dt>Service</dt><dd>{{ machine.remoteAccess?.serviceState || 'Not available' }} · {{ machine.remoteAccess?.serviceStartMode || '—' }}</dd></div>
+                <div><dt>Inbound firewall rule</dt><dd>{{ machine.remoteAccess?.enabledInboundFirewallRule === true ? 'Enabled rule found' : machine.remoteAccess?.enabledInboundFirewallRule === false ? 'No enabled rule found' : 'Not assessed' }}</dd></div>
+                <div><dt>Firewall rules detected</dt><dd>{{ machine.remoteAccess?.firewallRules?.length ?? 'Not assessed' }}</dd></div>
               </dl>
-              <p class="small text-secondary mt-2 mb-0">Configuration, service state, and firewall exposure are reported separately.</p>
+              <p class="small text-secondary mt-2 mb-0">Configuration, service state, and firewall exposure are reported separately when available.</p>
             </div>
           </div>
         </div>
@@ -398,6 +399,7 @@ onMounted(loadDashboard)
                   <div class="table-responsive mt-2">
                     <table class="table table-sm table-striped"><thead><tr><th>User</th><th>Enabled</th><th>Last sign-in</th></tr></thead>
                       <tbody><tr v-for="user in collectorData('accountsAndGroups').users" :key="user.Name"><td>{{ user.Name }}</td><td>{{ user.Enabled ? 'Yes' : 'No' }}</td><td>{{ formatDate(user.LastLogon) }}</td></tr></tbody>
+                                          <tbody><tr v-for="user in collectorData('accountsAndGroups').users" :key="user.Name"><td>{{ user.Name }}</td><td>{{ user.Enabled === null ? 'Unknown' : user.Enabled ? 'Yes' : 'No' }}</td><td>{{ formatDate(user.LastLogon) }}</td></tr></tbody>
                     </table>
                   </div>
                   <div v-for="group in collectorData('accountsAndGroups').groups" :key="group.name" class="small mb-1"><strong>{{ group.name }}:</strong> {{ group.members?.map((member) => member.name || member.errorCode).join(', ') || 'No members returned' }}</div>
