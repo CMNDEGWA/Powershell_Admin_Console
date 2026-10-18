@@ -106,7 +106,7 @@ def build_audit_pdf(audit: dict[str, Any]) -> bytes:
     operating_system = machine.get("operatingSystem") or {}
     hardware = machine.get("hardware") or {}
     adapters = machine.get("networkAdapters") or []
-    rdp = machine.get("remoteDesktop") or {}
+    remote_access = machine.get("remoteAccess") or machine.get("remoteDesktop") or {}
 
     output = BytesIO()
     document = SimpleDocTemplate(
@@ -172,13 +172,11 @@ def build_audit_pdf(audit: dict[str, Any]) -> bytes:
         _section_title("Machine overview", styles),
     ]
     overview = [
-        ["Hostname", _text(machine.get("hostname")), "Windows", _text(operating_system.get("caption"))],
-        ["Version / build", _text(f"{operating_system.get('version', '')} / {operating_system.get('build', '')}"),
-         "Architecture", _text(operating_system.get("architecture"))],
+        ["Hostname", _text(machine.get("hostname")), "Platform", _text(machine.get("platform"))],
+        ["Operating system", _text(operating_system.get("caption")), "Version / build", _text(f"{operating_system.get('version', '')} / {operating_system.get('build', '')}")],
+        ["Architecture", _text(operating_system.get("architecture")), "PowerShell host", _text(operating_system.get("powershellVersion"))],
         ["Manufacturer / model", _text(f"{hardware.get('manufacturer', '')} / {hardware.get('model', '')}"),
          "Administrator", _text(machine.get("administrator"))],
-        ["PowerShell", _text(operating_system.get("powershellVersion")),
-         "64-bit process", _text(operating_system.get("powershellProcess64Bit"))],
         ["Last boot", _text(operating_system.get("lastBootTime")),
          "Memory", _text(f"{hardware.get('memoryBytes', 'Not available')} bytes")],
     ]
@@ -348,17 +346,15 @@ def build_audit_pdf(audit: dict[str, Any]) -> bytes:
         column_widths=[width * mm for width in [20, 25, 12, 14, 20, 85]],
     )
 
-    rdp_enabled_rules = sum(
-        1 for rule in rdp.get("firewallRules", [])
-        if rule.get("enabled") == "True" and rule.get("direction") == "Inbound"
-    )
+    inbound_rule_status = remote_access.get("enabledInboundFirewallRule")
     story.extend([
         Spacer(1, 5 * mm),
-        _section_title("Remote Desktop", styles),
+        _section_title(remote_access.get("name", "Remote access"), styles),
         Paragraph(
-            "Configuration: " + _text(rdp.get("configuredEnabled")) +
-            " · Service: " + _text(rdp.get("serviceState")) +
-            " · Enabled inbound firewall rules: " + str(rdp_enabled_rules),
+            "Configuration: " + _text(remote_access.get("configuredEnabled")) +
+                " · Service: " + _text(remote_access.get("serviceState")) +
+            " · Enabled inbound firewall rule: " +
+            ("Yes" if inbound_rule_status is True else "No" if inbound_rule_status is False else "Not assessed"),
             styles["BodyText"],
         ),
         Spacer(1, 5 * mm),

@@ -50,8 +50,8 @@ def generate_recommendations(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
                     rule_id=f"firewall-disabled-{str(profile.get('Name', 'unknown')).lower()}",
                     title=f"{profile.get('Name', 'A firewall')} profile is disabled",
                     severity="high",
-                    summary="Windows Firewall is disabled for this network profile.",
-                    recommendation="Enable the firewall profile unless a documented security control provides equivalent protection.",
+                    summary=f"The {profile.get('Name', 'system firewall')} profile is disabled.",
+                    recommendation="Enable a host firewall unless a documented security control provides equivalent protection.",
                     evidence=profile,
                 ))
 
@@ -77,7 +77,7 @@ def generate_recommendations(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
                 evidence={"uacEnabled": False},
             ))
 
-    machine = snapshot.get("machine", {})
+    machine = snapshot.get("machine") or {}
     remote_desktop = machine.get("remoteDesktop", {}) if isinstance(machine, dict) else {}
     if remote_desktop.get("configuredEnabled") is True:
         firewall_open = remote_desktop.get("enabledInboundFirewallRule") is True
@@ -99,8 +99,22 @@ def generate_recommendations(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
             },
         ))
 
+    remote_access = machine.get("remoteAccess", {}) if isinstance(machine, dict) else {}
+    if (
+        machine.get("platform") in {"linux", "macos"}
+        and str(remote_access.get("serviceState", "")).lower() in {"active", "running"}
+    ):
+        findings.append(_finding(
+            rule_id="ssh-service-active",
+            title=f"{remote_access.get('name', 'SSH')} service is active",
+            severity="low",
+            summary="A remote-login service is active on this system.",
+            recommendation="Confirm remote login is required and restrict it to approved users and trusted networks.",
+            evidence={"serviceState": remote_access.get("serviceState")},
+        ))
+
     accounts = _data(snapshot, "accountsAndGroups")
-    if isinstance(accounts, dict):
+    if isinstance(accounts, dict) and machine.get("platform") in {None, "windows"}:
         for user in _items(accounts.get("users")):
             if (
                 isinstance(user, dict)
