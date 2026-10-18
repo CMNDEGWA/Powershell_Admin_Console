@@ -9,6 +9,7 @@ src/pac/main.py
 src/pac/audit/collectors.py
 src/pac/audit/db.py
 src/pac/audit/pdf.py
+src/pac/audit/platforms.py
 src/pac/audit/recommendations.py
 src/pac/powershell/__init__.py
 src/pac/powershell/runner.py

@@ -4,6 +4,7 @@ Version: 0.1.0
 Summary: A local-first PowerShell administration console
 Requires-Python: >=3.11
 Requires-Dist: fastapi<1.0,>=0.115
+Requires-Dist: psutil<8.0,>=6.0
 Requires-Dist: reportlab<5.0,>=4.2
 Requires-Dist: uvicorn<1.0,>=0.30
 Provides-Extra: dev
