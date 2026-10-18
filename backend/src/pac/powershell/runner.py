@@ -1,15 +1,20 @@
 
 from __future__ import annotations
 
+import platform
 import shutil
 import subprocess
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 
 MAX_OUTPUT_BYTES = 16 * 1024
 DEFAULT_TIMEOUT_SECONDS = 10
+AUDIT_OUTPUT_LIMIT_BYTES = 24 * 1024 * 1024
+AUDIT_TIMEOUT_SECONDS = 180
+APPROVED_SCRIPTS = {"hello.ps1", "audit.ps1"}
 
 
 class PowerShellExecutionError(RuntimeError):
@@ -29,6 +34,41 @@ def run_hello_task(
 ) -> TaskResult:
     """Run the one approved diagnostic script with bounded output."""
 
+    return _run_approved_script(
+        "hello.ps1",
+        (),
+        timeout_seconds=timeout_seconds,
+        max_output_bytes=max_output_bytes,
+    )
+
+
+def run_audit_script(mode: str) -> TaskResult:
+    """Run the fixed Windows inventory script in an approved mode."""
+    if mode not in {"summary", "audit"}:
+        raise ValueError("Unsupported audit mode")
+    if platform.system() != "Windows":
+        raise PowerShellExecutionError(
+            "System auditing is supported on Windows only"
+        )
+
+    return _run_approved_script(
+        "audit.ps1",
+        ("-Mode", mode),
+        timeout_seconds=AUDIT_TIMEOUT_SECONDS,
+        max_output_bytes=AUDIT_OUTPUT_LIMIT_BYTES,
+    )
+
+
+def _run_approved_script(
+    script_name: str,
+    arguments: Sequence[str],
+    *,
+    timeout_seconds: float,
+    max_output_bytes: int,
+) -> TaskResult:
+    if script_name not in APPROVED_SCRIPTS:
+        raise PowerShellExecutionError("Script is not approved")
+
     if timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be greater than zero")
     if max_output_bytes <= 0:
@@ -42,7 +82,7 @@ def run_hello_task(
 
     # Resolve a fixed, application-owned script; never accept a path from a caller.
     project_root = Path(__file__).resolve().parents[4]
-    script = project_root / "powershell" / "scripts" / "hello.ps1"
+    script = project_root / "powershell" / "scripts" / script_name
 
     if not script.is_file():
         raise PowerShellExecutionError(
@@ -56,6 +96,7 @@ def run_hello_task(
         "-NonInteractive",
         "-File",
         str(script),
+        *arguments,
     ]
 
     try:
