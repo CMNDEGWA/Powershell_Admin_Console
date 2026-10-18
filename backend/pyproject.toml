@@ -10,6 +10,7 @@ description = "A local-first PowerShell administration console"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115,<1.0",
+    "psutil>=6.0,<8.0",
     "reportlab>=4.2,<5.0",
     "uvicorn>=0.30,<1.0",
 ]
