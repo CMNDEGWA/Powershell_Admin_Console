@@ -395,6 +395,12 @@ def build_audit_pdf(audit: dict[str, Any]) -> bytes:
                     styles["PACFinding"],
                 ),
                 Paragraph(_text(finding.get("summary")), styles["PACFinding"]),
+                Paragraph("Severity rationale: " + _text(finding.get("severity_rationale")), styles["PACFinding"]),
+                Paragraph(
+                    "Applies to: " + _text(finding.get("applicability")) +
+                    " · Confidence: " + _text(finding.get("confidence")),
+                    styles["PACFinding"],
+                ),
                 Paragraph("Recommendation: " + _text(finding.get("recommendation")), styles["PACFinding"]),
                 Paragraph("Evidence: " + _text(finding.get("evidence")), styles["PACCell"]),
                 Spacer(1, 3 * mm),

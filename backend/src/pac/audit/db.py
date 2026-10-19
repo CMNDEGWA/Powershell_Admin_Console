@@ -6,9 +6,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from pac.audit.privacy import sanitize_snapshot
+
 
 DB_PATH = Path(__file__).resolve().parents[3] / "data" / "pac.sqlite3"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def utc_now() -> str:
@@ -16,11 +18,12 @@ def utc_now() -> str:
 
 
 def init_db(db_path: Path | None = None) -> None:
-    """Create or upgrade the local audit database schema."""
+    """Create the schema and redact saved snapshots when upgrading to v2."""
     path = db_path or DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with sqlite3.connect(path, timeout=5) as connection:
+        connection.execute("PRAGMA secure_delete = ON")
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS task_history (
@@ -52,7 +55,21 @@ def init_db(db_path: Path | None = None) -> None:
             )
             """
         )
-        connection.execute("PRAGMA user_version = 1")
+        if version < 2:
+            rows = connection.execute(
+                "SELECT id, snapshot_json FROM audit_runs"
+            ).fetchall()
+            for audit_id, snapshot_json in rows:
+                snapshot = json.loads(snapshot_json)
+                if not isinstance(snapshot, dict):
+                    raise RuntimeError("Saved audit snapshot is invalid")
+                snapshot = sanitize_snapshot(snapshot)
+                snapshot["schema_version"] = 2
+                connection.execute(
+                    "UPDATE audit_runs SET schema_version = 2, snapshot_json = ? WHERE id = ?",
+                    (json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"), allow_nan=False), audit_id),
+                )
+        connection.execute("PRAGMA user_version = 2")
 
 
 def record_audit_run(
@@ -142,11 +159,21 @@ def list_audit_runs(
     return [dict(row) for row in rows]
 
 
+def get_storage_usage(db_path: Path | None = None) -> dict[str, int]:
+    """Return the local database size and saved-audit count."""
+    path = db_path or DB_PATH
+    init_db(path)
+    with sqlite3.connect(path, timeout=5) as connection:
+        count = connection.execute("SELECT COUNT(*) FROM audit_runs").fetchone()[0]
+    return {"database_bytes": path.stat().st_size, "audit_count": int(count)}
+
+
 def delete_audit_run(audit_id: int, db_path: Path | None = None) -> bool:
     """Delete a saved audit snapshot by its local database identifier."""
     path = db_path or DB_PATH
     init_db(path)
     with sqlite3.connect(path, timeout=5) as connection:
+        connection.execute("PRAGMA secure_delete = ON")
         cursor = connection.execute("DELETE FROM audit_runs WHERE id = ?", (audit_id,))
         return cursor.rowcount == 1
 
