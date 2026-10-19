@@ -1,5 +1,5 @@
-# Vue 3 + Vite
+# PAC Frontend
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+The Vue 3 dashboard is served by Vite on `127.0.0.1:5173`; its `/api` requests are proxied to the backend at `127.0.0.1:8000`.
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+From this directory, install dependencies with `npm ci`, start the dev server with `npm run dev`, run component tests with `npm run test`, and build production assets with `npm run build`. See the repository [README](../README.md) for backend setup, platform prerequisites, audit scope, and privacy behavior.
