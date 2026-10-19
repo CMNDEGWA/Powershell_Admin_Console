@@ -13,12 +13,14 @@ from pac.audit.collectors import (
 from pac.audit.db import (
     delete_audit_run,
     get_audit_run,
+    get_storage_usage,
     list_audit_runs,
     list_history,
     record_audit_run,
     record_execution,
 )
 from pac.audit.pdf import build_audit_pdf
+from pac.audit.privacy import sanitize_snapshot
 from pac.audit.recommendations import generate_recommendations
 from pac.powershell.runner import (
     PowerShellExecutionError,
@@ -138,6 +140,11 @@ def get_history(limit: int = 20) -> dict:
     return {"history": list_history(limit=limit)}
 
 
+@app.get("/api/storage")
+def get_local_storage_usage() -> dict[str, int]:
+    return get_storage_usage()
+
+
 @app.get("/api/system/summary")
 def get_system_summary() -> dict:
     try:
@@ -176,6 +183,8 @@ def create_audit() -> dict:
 
     if "error_code" not in snapshot:
         snapshot["recommendations"] = generate_recommendations(snapshot)
+    snapshot = sanitize_snapshot(snapshot)
+    snapshot["schema_version"] = 2
     status = audit_status(snapshot)
     finished_at = current_timestamp()
     audit_id = record_audit_run(
