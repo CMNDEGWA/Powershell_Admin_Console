@@ -192,6 +192,8 @@ def test_audit_snapshot_can_be_exported_and_deleted(tmp_path: Path, monkeypatch)
     assert created.status_code == 201
     audit_id = created.json()["id"]
     assert created.json()["status"] == "succeeded"
+    assert "00-11-22-33-44-55" not in created.text
+    assert "192.0.2.10" not in created.text
     assert [finding["id"] for finding in created.json()["snapshot"]["recommendations"]] == [
         "pending-updates"
     ]
@@ -206,6 +208,7 @@ def test_audit_snapshot_can_be_exported_and_deleted(tmp_path: Path, monkeypatch)
     deleted = client.delete(f"/api/audits/{audit_id}")
     assert deleted.status_code == 204
     assert client.get(f"/api/audits/{audit_id}").status_code == 404
+    assert client.get("/api/storage").json()["audit_count"] == 0
 
 
 def test_audit_reports_unsupported_target(tmp_path: Path, monkeypatch) -> None:

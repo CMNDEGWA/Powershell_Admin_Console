@@ -1,9 +1,13 @@
 
 import json
+import shutil
+
+import pytest
 
 from pac.powershell.runner import run_hello_task
 
 
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="PowerShell 7 is not installed")
 def test_hello_task_returns_diagnostic_json() -> None:
     result = run_hello_task()
 

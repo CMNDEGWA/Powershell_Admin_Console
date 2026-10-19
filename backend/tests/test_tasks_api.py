@@ -1,5 +1,7 @@
 import json
+import shutil
 
+import pytest
 from fastapi.testclient import TestClient
 
 from pac.main import app
@@ -16,6 +18,7 @@ def test_list_approved_tasks() -> None:
     assert [task["id"] for task in tasks] == ["hello"]
 
 
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="PowerShell 7 is not installed")
 def test_run_approved_task() -> None:
     response = client.post("/api/tasks/hello/run")
 

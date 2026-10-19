@@ -1,4 +1,5 @@
 import json
+import platform
 
 import pytest
 
@@ -26,6 +27,7 @@ def test_detect_platform(system_name: str, expected: str) -> None:
 
 
 @pytest.mark.parametrize("target", ["linux", "macos"])
+@pytest.mark.skipif(platform.system() == "Windows", reason="POSIX summary uses POSIX-only process APIs")
 def test_posix_summary_has_normalized_platform_fields(target: str) -> None:
     summary = platform_collectors.collect_posix_summary(target)
 
@@ -212,6 +214,9 @@ def test_recommendations_are_evidence_backed_and_sorted() -> None:
     ]
     assert all(finding["evidence"] for finding in findings)
     assert all(finding["rule_version"] for finding in findings)
+    assert all(finding["severity_rationale"] for finding in findings)
+    assert all(finding["applicability"] for finding in findings)
+    assert all(finding["confidence"] in {"high", "medium", "limited"} for finding in findings)
 
 
 def test_posix_active_remote_login_gets_a_recommendation() -> None:
@@ -224,3 +229,20 @@ def test_posix_active_remote_login_gets_a_recommendation() -> None:
     })
 
     assert findings[0]["id"] == "ssh-service-active"
+
+
+def test_remote_desktop_unknown_firewall_state_is_not_reported_as_closed() -> None:
+    finding = generate_recommendations({
+        "machine": {
+            "platform": "windows",
+            "remoteDesktop": {
+                "configuredEnabled": True,
+                "enabledInboundFirewallRule": None,
+            },
+        },
+        "collectors": {},
+    })[0]
+
+    assert "not collected" in finding["summary"]
+    assert finding["confidence"] == "limited"
+    assert finding["evidence"]["enabledInboundFirewallRule"] is None
