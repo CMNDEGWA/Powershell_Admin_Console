@@ -5,6 +5,8 @@ const health = ref('Checking')
 const machine = ref(null)
 const summaryError = ref('')
 const audits = ref([])
+const storageUsage = ref({ database_bytes: 0, audit_count: 0 })
+const storageError = ref('')
 const selectedAudit = ref(null)
 const auditError = ref('')
 const auditLoading = ref(false)
@@ -14,6 +16,7 @@ const history = ref([])
 const taskResult = ref(null)
 const taskLoading = ref(false)
 const pageError = ref('')
+const STORAGE_WARNING_BYTES = 250 * 1024 * 1024
 
 const snapshot = computed(() => selectedAudit.value?.snapshot ?? null)
 const findings = computed(() => snapshot.value?.recommendations ?? [])
@@ -47,6 +50,15 @@ async function loadAudits() {
   else selectedAudit.value = null
 }
 
+async function refreshStorageUsage() {
+  storageError.value = ''
+  try {
+    storageUsage.value = await apiRequest('/api/storage')
+  } catch (err) {
+    storageError.value = err.message
+  }
+}
+
 async function loadDashboard() {
   pageError.value = ''
   const results = await Promise.allSettled([
@@ -54,6 +66,7 @@ async function loadDashboard() {
     apiRequest('/api/tasks'),
     apiRequest('/api/history?limit=10'),
     loadAudits(),
+    refreshStorageUsage(),
   ])
   if (results[0].status === 'fulfilled') health.value = results[0].value.status
   else {
@@ -79,6 +92,7 @@ async function runAudit() {
     selectedAudit.value = await apiRequest('/api/audits', { method: 'POST' })
     await refreshMachineSummary()
     await loadAudits()
+    await refreshStorageUsage()
   } catch (err) {
     auditError.value = err.message
   } finally {
@@ -111,6 +125,7 @@ async function deleteAudit(id) {
     await apiRequest(`/api/audits/${id}`, { method: 'DELETE' })
     if (selectedAudit.value?.id === id) selectedAudit.value = null
     await loadAudits()
+    await refreshStorageUsage()
   } catch (err) {
     auditError.value = err.message
   }
@@ -321,6 +336,13 @@ onMounted(loadDashboard)
               <h3 class="h6 mb-0">Saved audits</h3>
               <span class="small text-secondary">{{ audits.length }}</span>
             </div>
+            <p class="small text-secondary mb-2" aria-live="polite">
+              Local database: {{ formatBytes(storageUsage.database_bytes) }} · {{ storageUsage.audit_count }} saved audits
+            </p>
+            <p v-if="storageError" class="small text-warning" role="status">Storage usage unavailable: {{ storageError }}</p>
+            <div v-if="storageUsage.database_bytes >= STORAGE_WARNING_BYTES" class="alert alert-warning small p-2" role="status">
+              Audit data is retained until you delete it. The local database has grown beyond 250 MiB.
+            </div>
             <div class="saved-audit-list">
               <div v-for="audit in audits" :key="audit.id" class="saved-audit-row" :class="{ selected: selectedAudit?.id === audit.id }">
                 <button class="saved-audit-select" @click="loadAudit(audit.id)">
@@ -362,6 +384,8 @@ onMounted(loadDashboard)
                     </div>
                     <p class="mb-1">{{ finding.summary }}</p>
                     <p class="small mb-1"><strong>Recommendation:</strong> {{ finding.recommendation }}</p>
+                    <p class="small mb-1"><strong>Severity rationale:</strong> {{ finding.severity_rationale }}</p>
+                    <p class="small mb-1"><strong>Applies to:</strong> {{ finding.applicability }} · <strong>Confidence:</strong> {{ finding.confidence }}</p>
                     <details class="small text-secondary">
                       <summary>Evidence · rule {{ finding.rule_version }}</summary>
                       <pre class="result-output mt-2">{{ JSON.stringify(finding.evidence, null, 2) }}</pre>
@@ -399,7 +423,7 @@ onMounted(loadDashboard)
                   <div class="table-responsive mt-2">
                     <table class="table table-sm table-striped"><thead><tr><th>User</th><th>Enabled</th><th>Last sign-in</th></tr></thead>
                       <tbody><tr v-for="user in collectorData('accountsAndGroups').users" :key="user.Name"><td>{{ user.Name }}</td><td>{{ user.Enabled ? 'Yes' : 'No' }}</td><td>{{ formatDate(user.LastLogon) }}</td></tr></tbody>
-                                          <tbody><tr v-for="user in collectorData('accountsAndGroups').users" :key="user.Name"><td>{{ user.Name }}</td><td>{{ user.Enabled === null ? 'Unknown' : user.Enabled ? 'Yes' : 'No' }}</td><td>{{ formatDate(user.LastLogon) }}</td></tr></tbody>
+                    <tbody><tr v-for="user in collectorData('accountsAndGroups').users" :key="user.Name"><td>{{ user.Name }}</td><td>{{ user.Enabled === null ? 'Unknown' : user.Enabled ? 'Yes' : 'No' }}</td><td>{{ formatDate(user.LastLogon) }}</td></tr></tbody>
                     </table>
                   </div>
                   <div v-for="group in collectorData('accountsAndGroups').groups" :key="group.name" class="small mb-1"><strong>{{ group.name }}:</strong> {{ group.members?.map((member) => member.name || member.errorCode).join(', ') || 'No members returned' }}</div>
