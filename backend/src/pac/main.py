@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from starlette.responses import JSONResponse
 
+from pac.approval import approval_status, request_native_approval
 from pac.audit.collectors import (
     InsufficientAuditPrivileges,
     UnsupportedAuditPlatform,
@@ -66,6 +67,16 @@ def current_timestamp() -> str:
 @app.get("/api/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok", "app": "PAC"}
+
+
+@app.get("/api/approval")
+def get_approval_status() -> dict:
+    return approval_status()
+
+
+@app.post("/api/approval/request")
+def request_approval() -> dict:
+    return request_native_approval()
 
 
 @app.get("/api/tasks")
