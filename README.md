@@ -4,7 +4,7 @@ PAC is a local-first, read-only system inventory and audit dashboard. The Vue fr
 
 ## Current Status
 
-This is a development preview, not a production-ready administration product. Arbitrary shell execution and automatic remediation are not supported. The current full-audit path requires the backend process itself to have administrator/root privileges. A separate, OS-native approval helper is **not implemented yet**; a browser confirmation cannot elevate the backend. Do not expose the backend to a network or use it as a multi-user service.
+This is a development preview, not a production-ready administration product. Arbitrary shell execution and automatic remediation are not supported. The current full-audit path requires the backend process itself to have administrator/root privileges. A separate, OS-native approval helper is now exposed through the backend API, but it still relies on the local host user approving the system elevation prompt; a browser confirmation alone cannot elevate the backend. Do not expose the backend to a network or use it as a multi-user service.
 
 ## Audit Scope
 
@@ -21,7 +21,7 @@ The table describes implemented collector paths, not a certification of every OS
 | macOS | Native Python collectors plus launchctl and macOS utilities | Full audit currently requires root. Update inventory is unavailable. Firewall/security results depend on `socketfilterfw`, `spctl`, and `fdesetup`. There is no signed privileged-helper installer or macOS CI certification yet. |
 | Other | Unsupported | No audit collector is provided. |
 
-The intended release matrix must name tested Windows editions/releases, Linux distributions/releases and required packages, and macOS releases. Until platform CI and native approval helpers exist, treat Linux/macOS as collector previews rather than a supported privileged release.
+The intended release matrix must name tested Windows editions/releases, Linux distributions/releases and required packages, and macOS releases. The backend now exposes `/api/approval` and `/api/approval/request` so the UI or an operator can check whether native OS authorization is available and trigger the host's local approval flow. Until platform CI and signed helper packaging exist, treat Linux/macOS as collector previews rather than a supported privileged release.
 
 ## Privacy And Storage
 
