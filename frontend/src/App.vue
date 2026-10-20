@@ -15,6 +15,8 @@ const tasks = ref([])
 const history = ref([])
 const taskResult = ref(null)
 const taskLoading = ref(false)
+const approval = ref({ approved: false, requiresApproval: true, helperCommand: '', explanation: '' })
+const approvalLoading = ref(false)
 const pageError = ref('')
 const STORAGE_WARNING_BYTES = 250 * 1024 * 1024
 
@@ -36,6 +38,35 @@ async function refreshMachineSummary() {
   } catch (err) {
     machine.value = null
     summaryError.value = err.message
+  }
+}
+
+async function refreshApprovalStatus() {
+  try {
+    approval.value = await apiRequest('/api/approval')
+  } catch (err) {
+    approval.value = {
+      approved: false,
+      requiresApproval: true,
+      helperCommand: '',
+      explanation: err.message,
+    }
+  }
+}
+
+async function requestApproval() {
+  approvalLoading.value = true
+  try {
+    approval.value = await apiRequest('/api/approval/request', { method: 'POST' })
+  } catch (err) {
+    approval.value = {
+      approved: false,
+      requiresApproval: true,
+      helperCommand: '',
+      explanation: err.message,
+    }
+  } finally {
+    approvalLoading.value = false
   }
 }
 
@@ -67,6 +98,7 @@ async function loadDashboard() {
     apiRequest('/api/history?limit=10'),
     loadAudits(),
     refreshStorageUsage(),
+    refreshApprovalStatus(),
   ])
   if (results[0].status === 'fulfilled') health.value = results[0].value.status
   else {
@@ -324,9 +356,17 @@ onMounted(loadDashboard)
             <h2 id="audit-title" class="h3 mb-1">System audit</h2>
             <p class="text-secondary mb-0">Review the collected configuration, security findings, and event-log coverage.</p>
           </div>
-          <button class="btn btn-primary" :disabled="auditLoading || health !== 'ok' || machine?.supportedTarget !== true || machine?.administrator !== true" @click="runAudit">
-            {{ auditLoading ? 'Collecting system data…' : 'Run full audit' }}
-          </button>
+          <div class="d-flex flex-wrap gap-2">
+            <button v-if="approval?.requiresApproval" class="btn btn-outline-secondary" :disabled="approvalLoading || health !== 'ok'" @click="requestApproval">
+              {{ approvalLoading ? 'Requesting approval…' : 'Request local approval' }}
+            </button>
+            <button class="btn btn-primary" :disabled="auditLoading || health !== 'ok' || machine?.supportedTarget !== true || machine?.administrator !== true" @click="runAudit">
+              {{ auditLoading ? 'Collecting system data…' : 'Run full audit' }}
+            </button>
+          </div>
+        </div>
+        <div v-if="approval?.requiresApproval" class="alert alert-info small" role="status">
+          Local OS approval is required before a full audit can run. Use the native helper command: <code>{{ approval.helperCommand || 'No helper command is available on this platform.' }}</code>
         </div>
         <div v-if="auditError" class="alert alert-warning" role="alert">{{ auditError }}</div>
 
